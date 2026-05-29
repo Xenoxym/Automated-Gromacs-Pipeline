@@ -9,11 +9,15 @@ fi
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=/dev/null
 source "$PROJECT_DIR/config.env"
+# shellcheck source=/dev/null
+source "$PROJECT_DIR/scripts/setup_gmx.sh"
 
 SYS_DIR="$(realpath "$1")"
 cd "$SYS_DIR"
 
 echo "===== Running $SYS_DIR ====="
+echo "GMX_BIN=${GMX_BIN} (gmx function overrides conda PATH)"
+gmx -version 2>&1 | head -15 | tee gmx_version.txt
 
 for f in complex.gro topol.top ligand.itp ligand_atomtypes.itp; do
   if [ ! -f "$f" ]; then
@@ -26,16 +30,43 @@ run_mdrun() {
   local deffnm="$1"
   shift
   local extra=("$@")
-  echo ">>> mdrun -deffnm $deffnm (try GPU: $GMX_MDRUN_GPU_FLAGS)"
-  if gmx mdrun -deffnm "$deffnm" -v $GMX_MDRUN_GPU_FLAGS "${extra[@]}"; then
-    return 0
+  local -a gpu_flags fallback_flags mdrun_base
+  local log="${deffnm}_mdrun.log"
+
+  read -r -a gpu_flags <<< "${GMX_MDRUN_GPU_FLAGS:-}"
+  read -r -a fallback_flags <<< "${GMX_MDRUN_GPU_FLAGS_FALLBACK:-}"
+  mdrun_base=(gmx mdrun -deffnm "$deffnm" -v)
+  if [ -n "${GMX_GPU_ID:-}" ]; then
+    mdrun_base+=(-gpu_id "$GMX_GPU_ID")
   fi
-  echo "WARN: GPU mdrun failed for $deffnm; retrying with -nb gpu only"
-  if gmx mdrun -deffnm "$deffnm" -v -nb gpu -pin on "${extra[@]}"; then
-    return 0
+
+  echo ">>> mdrun -deffnm $deffnm GPU flags: ${gpu_flags[*]:-none}"
+  if [ "${#gpu_flags[@]}" -gt 0 ]; then
+    if "${mdrun_base[@]}" "${gpu_flags[@]}" "${extra[@]}" 2>&1 | tee -a "$log"; then
+      if grep -qiE 'Using.*GPU|CUDA|NB on GPU|nonbonded on GPU' "$log" 2>/dev/null; then
+        echo ">>> $deffnm: GPU path OK (see $log)"
+      else
+        echo "WARN: $deffnm finished but log may not show GPU — check $log and nvidia-smi"
+      fi
+      return 0
+    fi
+    echo "WARN: GPU mdrun failed for $deffnm (flags: ${gpu_flags[*]})" | tee -a "$log"
   fi
-  echo "WARN: Partial GPU failed; retrying CPU mdrun for $deffnm"
-  gmx mdrun -deffnm "$deffnm" -v "${extra[@]}"
+
+  if [ "${#fallback_flags[@]}" -gt 0 ]; then
+    echo ">>> retry GPU fallback: ${fallback_flags[*]}"
+    if "${mdrun_base[@]}" "${fallback_flags[@]}" "${extra[@]}" 2>&1 | tee -a "$log"; then
+      return 0
+    fi
+    echo "WARN: GPU fallback failed for $deffnm" | tee -a "$log"
+  fi
+
+  if [ "${GMX_MDRUN_ALLOW_CPU_FALLBACK:-yes}" = "no" ]; then
+    echo "ERROR: GPU mdrun failed and GMX_MDRUN_ALLOW_CPU_FALLBACK=no" >&2
+    return 1
+  fi
+  echo "WARN: retrying CPU-only mdrun for $deffnm" | tee -a "$log"
+  gmx mdrun -deffnm "$deffnm" -v "${extra[@]}" 2>&1 | tee -a "$log"
 }
 
 if [ ! -f boxed.gro ]; then
@@ -87,7 +118,9 @@ if [ ! -f em.gro ]; then
 fi
 
 if [ ! -f index.ndx ]; then
-  printf "r %s\nname 20 LIG\n1 | 20\nname 21 Protein_LIG\nq\n" "$LIGAND_RESNAME" | \
+  # MDP tc-grps need Protein_LIG and Water_and_ions (nvt/npt/md_*.mdp).
+  # Group 1 = Protein (default); 20 = ligand; 21 = Protein_LIG; 22 = !21 (SOL + ions).
+  printf "r %s\nname 20 LIG\n1 | 20\nname 21 Protein_LIG\n!21\nname 22 Water_and_ions\nq\n" "$LIGAND_RESNAME" | \
     gmx make_ndx -f em.gro -o index.ndx
 fi
 

@@ -7,8 +7,8 @@ Batch molecular dynamics for **one receptor, many docked ligands** (or many pose
 ## Environment
 
 - **OS:** WSL2 with **Ubuntu 22.04**
-- **Conda env `mdtools`:** `gmx`, Open Babel, AmberTools (`antechamber`, `parmchk2`), ACPYPE
-- **GROMACS:** CUDA build for `mdrun` (install scripts target a local CUDA build; conda `gmx` may need GPU flag fallback — see `docs/TROUBLESHOOTING.md`)
+- **Conda env `mdtools`:** Open Babel, AmberTools (`antechamber`, `parmchk2`), ACPYPE — **ligand parameterization only**
+- **GROMACS (MD):** CUDA build from `install/01_install_gromacs_cuda.sh` → `~/apps/gromacs-2026.2-cuda` (do **not** use conda `gmx` for `mdrun`; it is often CPU-only)
 
 Default force-field route:
 
@@ -17,6 +17,8 @@ Default force-field route:
 - Water: TIP3P
 
 CHARMM36m + CGenFF is valid but less convenient for fully local automation; see `docs/CHARMM_CGENFF_NOTES.md`.
+
+Repository text files use **LF** line endings (see `.gitattributes`); edit scripts on Windows with **EOL = LF** so WSL/bash does not break.
 
 ## Input convention
 
@@ -59,43 +61,67 @@ work/systems/<system_id>/
         │
         ▼  run_one_system.sh / run_all_systems.sh
         ├── solvated / ionized structures
-        └── em.*, nvt.*, npt.*, md_200ps.* ...
+        ├── index.ndx (Protein_LIG, Water_and_ions)
+        ├── em.*, nvt.*, npt.*, md_200ps.* ...
+        ├── gmx_version.txt, *_mdrun.log
+        │
+        ▼  analyze_one_system.sh / plot_rmsd.py
+        └── analysis/*.xvg, *.png
 ```
 
 Logs: `logs/prepare_<id>.log`, `logs/run_<id>.log`; batch lists `prepare_success.txt` / `prepare_failed.txt` (and run equivalents).
 
+## Install (once per WSL machine)
+
+```bash
+cd /path/to/Automated-Gromacs-Pipeline
+
+# System packages (cmake helper, FFTW, build tools)
+bash install/00_install_system_deps.sh
+
+# CUDA GROMACS — run outside conda if possible
+conda deactivate 2>/dev/null || true
+bash install/01_install_gromacs_cuda.sh
+# Installs CMake 3.28+ on Ubuntu 22.04 if needed; uses system FFTW (GMX_BUILD_OWN_FFTW=OFF)
+
+# Ligand tools (creates conda env mdtools)
+bash install/02_install_mdtools_conda.sh
+```
+
 ## Quick start
 
 ```bash
-cd /mnt/d/Projects/Automated-Gromacs-Pipeline   # or your clone path
+cd /path/to/Automated-Gromacs-Pipeline
 
-# 1. Edit config if needed
+# 1. Edit config if needed (ligand name, production MDP, GPU paths)
 nano config.env
 
-# 2. Install (once per WSL instance)
-bash install/00_install_system_deps.sh
-bash install/01_install_gromacs_cuda.sh
-bash install/02_install_mdtools_conda.sh
-
-# 3. Activate tools
-source ~/.bashrc
-source ~/miniforge3/etc/profile.d/conda.sh   # adjust if miniconda/mamba elsewhere
+# 2. Every new shell — mdtools for ACPYPE only; pipeline scripts force CUDA gmx via setup_gmx.sh
 conda activate mdtools
+# Do not rely on `which gmx` after conda activate — conda may put CPU gmx first on PATH.
+# prepare/run/analyze scripts use GMX_CUDA_PREFIX/bin/gmx automatically.
+bash scripts/run_one_system.sh work/systems/lig001
+# Check: cat work/systems/lig001/gmx_version.txt | grep -i cuda
 
-# 4. Prepare one system
+# 3. Prepare one system
 bash scripts/prepare_one_system.sh inputs/systems/lig001
 
-# 5. Sanity-check topology (optional)
+# 4. Sanity-check topology (optional)
 grep -E 'ligand_atomtypes|ligand\.itp|UNL|\[ molecules \]' work/systems/lig001/topol.top | head -20
 cd work/systems/lig001
 gmx grompp -f ../../../mdp/ions.mdp -c complex.gro -p topol.top -o prepare_check.tpr -maxwarn 2
 cd ../../..
 
-# 6. Run MD for one system
+# 5. Run MD for one system
 bash scripts/run_one_system.sh work/systems/lig001
 
-# 7. Analyze one system
+# 6. Analyze one system
 bash scripts/analyze_one_system.sh work/systems/lig001
+
+# 7. Plot RMSD / H-bond figures (needs matplotlib)
+conda install -c conda-forge matplotlib   # once
+python scripts/plot_rmsd.py work/systems/lig001
+python scripts/plot_rmsd.py --all
 
 # 8. Batch all systems under inputs/systems/
 bash scripts/prepare_all_systems.sh
@@ -103,6 +129,28 @@ bash scripts/run_all_systems.sh
 bash scripts/analyze_all_systems.sh
 bash scripts/summarize_results.sh
 ```
+
+## Which scripts use the GPU?
+
+Only **`gmx mdrun`** in `run_one_system.sh` uses the GPU. All pipeline shell scripts source **`scripts/setup_gmx.sh`**, which defines a `gmx()` function pointing at **`$GMX_CUDA_PREFIX/bin/gmx`** so **conda’s `gmx` is never used**, even after `conda activate mdtools`.
+
+| Script | GPU? | Main work |
+|--------|------|-----------|
+| `prepare_one_system.sh` | **No** | Python, `pdb2gmx`, Open Babel, ACPYPE, `grompp` |
+| `prepare_all_systems.sh` | **No** | Loops `prepare_one_system.sh` |
+| `run_one_system.sh` | **Partial** | `editconf`, `solvate`, `genion`, `grompp`, `make_ndx` = CPU; **`mdrun` = GPU** with fallback |
+| `run_all_systems.sh` | **Partial** | Same as `run_one_system.sh` per system |
+| `analyze_one_system.sh` | **No** | `trjconv`, `rms`, `hbond` |
+| `analyze_all_systems.sh` | **No** | Loops `analyze_one_system.sh` |
+| `plot_rmsd.py` | **No** | Matplotlib from `.xvg` |
+
+**`mdrun` fallback order** (see `config.env`):
+
+1. `GMX_MDRUN_GPU_FLAGS` (default `-nb gpu -pme gpu -pin on`)
+2. `GMX_MDRUN_GPU_FLAGS_FALLBACK` (default `-nb gpu -pin on`)
+3. CPU-only — only if `GMX_MDRUN_ALLOW_CPU_FALLBACK=yes`
+
+Check GPU usage: `work/systems/<id>/gmx_version.txt`, `em_mdrun.log`, `md_200ps_mdrun.log` (no `retrying CPU-only`), and `nvidia-smi` during `mdrun`.
 
 ## Recommended execution style
 
@@ -112,9 +160,11 @@ bash scripts/summarize_results.sh
    rm -rf work/systems/lig001    # or entire work/systems/
    ```
 
-2. **Run one system first** — inspect `md_200ps.log`, topology, and ligand groups before batching dozens of poses.
+2. **Run one system first** — inspect `md_200ps.log`, `*_mdrun.log`, and topology before batching.
 
 3. **Then batch** all directories under `inputs/systems/` that contain `pose_1_complex.pdb`.
+
+4. **After changing `mdp/` or production settings** — update `PRODUCTION_MDP` / `PRODUCTION_DEFFNM` in `config.env`, delete outputs for the affected stage (e.g. `rm -f md_200ps.* md_200ps_mdrun.log`), then re-run `run_one_system.sh`.
 
 ## WSL and Windows paths
 
@@ -150,8 +200,15 @@ Path helper: `bash scripts/windows_path_helper.sh`
 | `LIGAND_RESNAME` | `UNL` | Ligand residue name in PDB |
 | `LIGAND_NET_CHARGE` | `0` | Passed to ACPYPE |
 | `INPUT_POSE_FILENAME` | `pose_1_complex.pdb` | Input pose per system |
-| `PRODUCTION_MDP` / `PRODUCTION_DEFFNM` | `md_200ps` | Production run |
-| `GMX_MDRUN_GPU_FLAGS` | full GPU set | See troubleshooting if unsupported |
+| `PRODUCTION_MDP` | `md_200ps.mdp` | Production MDP file under `mdp/` |
+| `PRODUCTION_DEFFNM` | `md_200ps` | Output prefix for production `mdrun` |
+| `GMX_CUDA_PREFIX` | `~/apps/gromacs-2026.2-cuda` | CUDA GROMACS; sourced by `run_one_system.sh` |
+| `GMX_GPU_ID` | `0` | Passed to `mdrun -gpu_id` |
+| `GMX_MDRUN_GPU_FLAGS` | `-nb gpu -pme gpu -pin on` | Primary GPU flags |
+| `GMX_MDRUN_GPU_FLAGS_FALLBACK` | `-nb gpu -pin on` | Second try before CPU |
+| `GMX_MDRUN_ALLOW_CPU_FALLBACK` | `yes` | `no` = fail instead of silent CPU |
+
+Simulation length and thermostat/pressure are set in `mdp/` (`nsteps`, `dt`, etc.). Default production is **~0.2 ns** (`md_200ps.mdp`); use `md_500ps.mdp` or custom MDP for longer runs.
 
 Copy machine-specific overrides to `config.local.env` (gitignored), not committed secrets.
 
@@ -169,6 +226,7 @@ Main MD artifacts:
 ```text
 em.gro, nvt.gro, npt.gro
 md_200ps.xtc, md_200ps.gro, md_200ps.log
+gmx_version.txt, em_mdrun.log, md_200ps_mdrun.log, ...
 ```
 
 Per-system analysis:
@@ -177,6 +235,9 @@ Per-system analysis:
 analysis/rmsd_protein.xvg
 analysis/rmsd_ligand.xvg
 analysis/hbond_protein_ligand.xvg
+analysis/md_centered.xtc
+analysis/rmsd_dual.png      # from plot_rmsd.py
+analysis/hbond.png          # optional
 ```
 
 Batch summaries:
@@ -184,9 +245,11 @@ Batch summaries:
 ```text
 results/performance_summary.tsv
 results/basic_status.tsv
+results/rmsd_plot_summary.tsv   # from plot_rmsd.py --all
 ```
 
 ## More documentation
 
-- `docs/TROUBLESHOOTING.md` — ligand `ATOM`/`HETATM`, topology patch, ACPYPE, GPU flags, D-drive performance
+- `docs/ANALYSIS.md` — `.xvg` meaning, RMSD interpretation, plotting
+- `docs/TROUBLESHOOTING.md` — CRLF, `Water_and_ions`, CMake/FFTW install, GPU/CPU, D-drive performance
 - `docs/CHARMM_CGENFF_NOTES.md` — optional CHARMM route

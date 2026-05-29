@@ -39,3 +39,4 @@ command -v acpype
 command -v obabel
 
 echo "mdtools env ready. Use: conda activate mdtools"
+echo "Do NOT conda install gromacs into mdtools — MD uses CUDA GROMACS from install/01 (see GMX_CUDA_PREFIX in config.env)."

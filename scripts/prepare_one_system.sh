@@ -9,6 +9,8 @@ fi
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=/dev/null
 source "$PROJECT_DIR/config.env"
+# shellcheck source=/dev/null
+source "$PROJECT_DIR/scripts/setup_gmx.sh"
 
 INPUT_DIR="$(realpath "$1")"
 SYSTEM_ID="$(basename "$INPUT_DIR")"
