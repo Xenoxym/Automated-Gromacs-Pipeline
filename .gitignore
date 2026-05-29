@@ -1,0 +1,59 @@
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.vscode/
+.idea/
+*.code-workspace
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# --- Pipeline runtime (large / regenerable) ---
+work/
+logs/
+results/
+
+# --- GROMACS run artifacts ---
+*.tpr
+*.xtc
+*.trr
+*.edr
+*.cpt
+*.gro
+*.xvg
+*.log
+# Keep template MDPs in mdp/; ignore stray copies under work
+mdout.mdp
+
+# --- Ligand parameterization (ACPYPE / antechamber) ---
+*.acpype/
+acpype.log
+ANTECHAMBER_*
+ATOMTYPE.INF
+sqm.in
+sqm.out
+sqm.pdb
+*.frcmod
+*_AC.inpcrd
+*_AC.prmtop
+leap.log
+
+# --- Optional: large input batches (uncomment if inputs are huge) ---
+# inputs/systems/*/
+
+# --- Local overrides (secrets / machine paths) ---
+config.local.env
+.env
+.env.*
