@@ -17,25 +17,50 @@ If the residue name differs, edit `config.env`:
 LIGAND_RESNAME="MOL"
 ```
 
+Re-run prepare on a **clean** `work/systems/<id>/` directory.
+
+## Wrong input file (`docked_complex.pdb` in `inputs/`)
+
+The pipeline reads only `INPUT_POSE_FILENAME` (default `pose_1_complex.pdb`).
+Files such as `inputs/systems/<id>/docked_complex.pdb` are **ignored**.
+Delete or rename duplicates so you do not edit the wrong PDB.
+
 ## `Could not find [ molecules ] in topol.top`
 
 Usually a Windows CRLF parsing issue in an older script version, or a non-standard `topol.top`.
-Re-run prepare on a clean `work/systems/<id>/` directory; `patch_topology.py` normalizes line endings.
+Re-run prepare on a clean `work/systems/<id>/`; `patch_topology.py` normalizes line endings and patches idempotently.
+
+Verify includes:
+
+```bash
+grep -E 'ligand_atomtypes|ligand\.itp|UNL|\[ molecules \]' work/systems/<id>/topol.top
+```
+
+## Stale or half-finished `work/systems/<id>/`
+
+After a failed prepare, remove debug leftovers and re-run:
+
+```bash
+rm -rf work/systems/<id>
+bash scripts/prepare_one_system.sh inputs/systems/<id>
+```
+
+Do not reuse an unpatched `topol.top` or old `complex.gro` from a failed run.
 
 ## `acpype` fails
 
 Most common causes:
 
-1. Wrong ligand net charge.
+1. Wrong ligand net charge (`LIGAND_NET_CHARGE` in `config.env`).
 2. Bad ligand geometry from docking output.
-3. Missing hydrogens/protonation issue.
-4. Metal-containing ligand or covalent ligand: GAFF2 route may not be appropriate.
+3. Missing hydrogens / protonation issues.
+4. Metal-containing or covalent ligands: GAFF2 route may not be appropriate.
 
-Try manually inspecting `ligand.mol2` in PyMOL/ChimeraX/OpenBabel.
+Inspect `work/systems/<id>/ligand.mol2` in PyMOL, ChimeraX, or Open Babel.
 
 ## `Atomtype ... not found`
 
-The ligand atomtypes were not included before molecule definitions. Check `topol.top` contains:
+Ligand atomtypes must appear **before** molecule definitions in `topol.top`:
 
 ```top
 #include ".../forcefield.itp"
@@ -44,25 +69,31 @@ The ligand atomtypes were not included before molecule definitions. Check `topol
 #include "ligand.itp"
 ```
 
+Re-run `prepare_one_system.sh` if `patch_topology.py` was skipped or an old `topol.top` is in use.
+
 ## `make_ndx` group numbers wrong
 
-The script assumes default group numbers and creates LIG as group 20. If this fails, run manually:
+`run_one_system.sh` assumes default groups and creates LIG as group 20. If this fails, run manually:
 
 ```bash
 gmx make_ndx -f em.gro -o index.ndx
 ```
 
-Commands inside interactive prompt:
+Inside the prompt:
 
 ```text
-r LIG
+r UNL
 name <new_group_number> LIG
 Protein | LIG
 name <new_group_number> Protein_LIG
 q
 ```
 
-## `GPU update not supported`
+(Replace `UNL` with your `LIGAND_RESNAME` if different.)
+
+## GPU / `mdrun` flags not supported
+
+Conda GROMACS builds may not support every GPU flag. `run_one_system.sh` falls back: full GPU → `-nb gpu` only → CPU.
 
 Edit `config.env`:
 
@@ -76,12 +107,23 @@ If still failing:
 GMX_MDRUN_GPU_FLAGS="-nb gpu -pin on"
 ```
 
-## Running from D drive is slow
+Or empty for CPU-only.
 
-Move project into WSL native filesystem:
+## Running from Windows D: drive is slow
+
+`/mnt/d/...` has higher I/O latency than the WSL ext4 home directory. For long MD:
 
 ```bash
 mkdir -p ~/md_projects
-cp -r /mnt/d/path/to/2fvj_gromacs_pipeline ~/md_projects/
-cd ~/md_projects/2fvj_gromacs_pipeline
+cp -r /mnt/d/Projects/Automated-Gromacs-Pipeline ~/md_projects/
+cd ~/md_projects/Automated-Gromacs-Pipeline
+conda activate mdtools
 ```
+
+Edit from Windows:
+
+```text
+\\wsl$\Ubuntu-22.04\home\<your_user>\md_projects\Automated-Gromacs-Pipeline
+```
+
+Adjust `Ubuntu-22.04` if your WSL distro name differs (`wsl -l -v`).
