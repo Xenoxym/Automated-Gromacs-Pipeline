@@ -121,13 +121,13 @@ bash scripts/analyze_one_system.sh work/systems/lig001
 # 7. Plot RMSD / H-bond figures (needs matplotlib)
 conda install -c conda-forge matplotlib   # once
 python scripts/plot_rmsd.py work/systems/lig001
-python scripts/plot_rmsd.py --all
 
 # 8. Batch all systems under inputs/systems/
 bash scripts/prepare_all_systems.sh
 bash scripts/run_all_systems.sh
 bash scripts/analyze_all_systems.sh
 bash scripts/summarize_results.sh
+python scripts/plot_rmsd.py --all
 ```
 
 ## Which scripts use the GPU?
