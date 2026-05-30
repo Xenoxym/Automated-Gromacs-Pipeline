@@ -42,7 +42,8 @@ if [ ! -f analysis/rmsd_protein.xvg ]; then
 fi
 
 if [ ! -f analysis/rmsd_ligand.xvg ]; then
-  printf "LIG\nLIG\n" | gmx rms \
+  # Fit on protein backbone, RMSD on ligand (standard protein–ligand metric; NOT LIG|LIG).
+  printf "Backbone\nLIG\n" | gmx rms \
     -s "$TPR" \
     -f analysis/md_centered.xtc \
     -n index.ndx \
