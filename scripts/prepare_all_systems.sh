@@ -15,9 +15,9 @@ shopt -s nullglob
 for SYS in "$INPUT_ROOT"/*/; do
   [ -d "$SYS" ] || continue
   NAME="$(basename "$SYS")"
-  POSE="$SYS/${INPUT_POSE_FILENAME}"
+  POSE="$SYS/${INPUT_POSE_SUBDIR}/${INPUT_POSE_FILENAME}"
   if [ ! -f "$POSE" ]; then
-    echo "SKIP $NAME (no ${INPUT_POSE_FILENAME})"
+    echo "SKIP $NAME (no ${INPUT_POSE_SUBDIR}/${INPUT_POSE_FILENAME})"
     continue
   fi
 

@@ -15,14 +15,14 @@ source "$PROJECT_DIR/scripts/setup_gmx.sh"
 INPUT_DIR="$(realpath "$1")"
 SYSTEM_ID="$(basename "$INPUT_DIR")"
 WORK_DIR="$PROJECT_DIR/work/systems/$SYSTEM_ID"
-INPUT_POSE="$INPUT_DIR/${INPUT_POSE_FILENAME}"
+INPUT_POSE="$INPUT_DIR/${INPUT_POSE_SUBDIR}/${INPUT_POSE_FILENAME}"
 
 mkdir -p "$WORK_DIR"
 cd "$WORK_DIR"
 
 if [ ! -f "$INPUT_POSE" ]; then
   echo "ERROR: Input not found: $INPUT_POSE"
-  echo "Expected: <system_dir>/${INPUT_POSE_FILENAME}"
+  echo "Expected: <system_dir>/${INPUT_POSE_SUBDIR}/${INPUT_POSE_FILENAME}"
   exit 1
 fi
 

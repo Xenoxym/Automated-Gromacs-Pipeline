@@ -25,20 +25,20 @@ Repository text files use **LF** line endings (see `.gitattributes`); edit scrip
 One docked complex per system. **Folder name = system ID** (any string, e.g. `1001`, `abc123`, `lig001`):
 
 ```text
-inputs/systems/1001/pose_1_complex.pdb
-inputs/systems/abc123/pose_1_complex.pdb
+inputs/systems/1001/poses/pose_1_complex.pdb
+inputs/systems/abc123/poses/pose_1_complex.pdb
 ...
 ```
 
 | Topic | Detail |
 |--------|--------|
-| **Read by pipeline** | Only `pose_1_complex.pdb` (or the name in `INPUT_POSE_FILENAME` in `config.env`) |
+| **Read by pipeline** | `<system_dir>/poses/pose_1_complex.pdb` by default (`INPUT_POSE_SUBDIR` + `INPUT_POSE_FILENAME` in `config.env`) |
 | **Ignored** | `docked_complex.pdb` or other PDBs in `inputs/` — remove extras to avoid confusion |
 | **Docking quirk** | Ligand often appears as `ATOM` (not `HETATM`) after a premature `END`, with `REMARK` / `CONECT` before the ligand |
 
 The prepare step automatically:
 
-1. Reads `inputs/systems/<id>/${INPUT_POSE_FILENAME}`.
+1. Reads `inputs/systems/<id>/${INPUT_POSE_SUBDIR}/${INPUT_POSE_FILENAME}` (default `poses/pose_1_complex.pdb`).
 2. Runs `clean_docked_pdb.py`: protein `ATOM`, ligand `ATOM` → `HETATM`, strips spurious `END` / `REMARK` / `CONECT`.
 3. Writes `work/systems/<id>/docked_complex_cleaned.pdb`.
 4. Splits, parameterizes protein/ligand, merges `complex.gro`, patches `topol.top`.
@@ -48,7 +48,7 @@ Set `LIGAND_RESNAME` and `LIGAND_NET_CHARGE` in `config.env` for your ligand (de
 ## Data flow
 
 ```text
-inputs/systems/<system_id>/pose_1_complex.pdb
+inputs/systems/<system_id>/poses/pose_1_complex.pdb
         │
         ▼  prepare_one_system.sh / prepare_all_systems.sh
 work/systems/<system_id>/
@@ -162,7 +162,7 @@ Check GPU usage: `work/systems/<id>/gmx_version.txt`, `em_mdrun.log`, `md_200ps_
 
 2. **Run one system first** — inspect `md_200ps.log`, `*_mdrun.log`, and topology before batching.
 
-3. **Then batch** all directories under `inputs/systems/` that contain `pose_1_complex.pdb`.
+3. **Then batch** all directories under `inputs/systems/` that contain `poses/pose_1_complex.pdb`.
 
 4. **After changing `mdp/` or production settings** — update `PRODUCTION_MDP` / `PRODUCTION_DEFFNM` in `config.env`, delete outputs for the affected stage (e.g. `rm -f md_200ps.* md_200ps_mdrun.log`), then re-run `run_one_system.sh`.
 
@@ -199,7 +199,8 @@ Path helper: `bash scripts/windows_path_helper.sh`
 | `WATERMODEL` | `tip3p` | Water model |
 | `LIGAND_RESNAME` | `UNL` | Ligand residue name in PDB |
 | `LIGAND_NET_CHARGE` | `0` | Passed to ACPYPE |
-| `INPUT_POSE_FILENAME` | `pose_1_complex.pdb` | Input pose per system |
+| `INPUT_POSE_SUBDIR` | `poses` | Subfolder under each system ID |
+| `INPUT_POSE_FILENAME` | `pose_1_complex.pdb` | Pose PDB filename |
 | `PRODUCTION_MDP` | `md_200ps.mdp` | Production MDP file under `mdp/` |
 | `PRODUCTION_DEFFNM` | `md_200ps` | Output prefix for production `mdrun` |
 | `GMX_CUDA_PREFIX` | `~/apps/gromacs-2026.2-cuda` | CUDA GROMACS; sourced by `run_one_system.sh` |

@@ -21,8 +21,15 @@ Re-run prepare on a **clean** `work/systems/<id>/` directory.
 
 ## Wrong input file (`docked_complex.pdb` in `inputs/`)
 
-The pipeline reads only `INPUT_POSE_FILENAME` (default `pose_1_complex.pdb`).
-Files such as `inputs/systems/<id>/docked_complex.pdb` are **ignored**.
+The pipeline reads only:
+
+```text
+inputs/systems/<id>/poses/pose_1_complex.pdb
+```
+
+(configurable via `INPUT_POSE_SUBDIR` and `INPUT_POSE_FILENAME` in `config.env`.)
+
+Files such as `inputs/systems/<id>/docked_complex.pdb` or `pose_1_complex.pdb` at the system root are **ignored**.
 Delete or rename duplicates so you do not edit the wrong PDB.
 
 ## `Could not find [ molecules ] in topol.top`
