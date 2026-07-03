@@ -33,7 +33,6 @@ def plot_rmsd_complex(
     analysis_dir: Path,
     out_path: Path,
     system_id: str,
-    ref_lines: tuple[float, float, float] = (2.0, 3.0, 5.0),
 ) -> dict[str, float]:
     import matplotlib.pyplot as plt
 
@@ -47,13 +46,6 @@ def plot_rmsd_complex(
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
     ax.plot(time_ns, rmsd_A, label="Protein_LIG (complex)", color="steelblue", lw=1.5)
-
-    for val, color, lbl in zip(
-        ref_lines,
-        ("green", "goldenrod", "red"),
-        ("2 Å (stable)", "3 Å", "5 Å (unstable)"),
-    ):
-        ax.axhline(val, color=color, ls="--", alpha=0.45, lw=1, label=lbl)
 
     ax.set_xlabel("Time (ns)")
     ax.set_ylabel("RMSD (Å)")
