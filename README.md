@@ -86,6 +86,10 @@ bash install/01_install_gromacs_cuda.sh
 
 # Ligand tools (creates conda env mdtools)
 bash install/02_install_mdtools_conda.sh
+
+# Plotting (optional, for plot_rmsd.py)
+conda activate mdtools
+conda install -c conda-forge matplotlib
 ```
 
 ## Quick start
@@ -118,8 +122,7 @@ bash scripts/run_one_system.sh work/systems/lig001
 # 6. Analyze one system
 bash scripts/analyze_one_system.sh work/systems/lig001
 
-# 7. Plot RMSD / H-bond figures (needs matplotlib)
-conda install -c conda-forge matplotlib   # once
+# 7. Plot RMSD / H-bond figures
 python scripts/plot_rmsd.py work/systems/lig001
 
 # 8. Batch all systems under inputs/systems/
@@ -233,11 +236,10 @@ gmx_version.txt, em_mdrun.log, md_200ps_mdrun.log, ...
 Per-system analysis:
 
 ```text
-analysis/rmsd_protein.xvg
-analysis/rmsd_ligand.xvg
+analysis/rmsd_complex.xvg
 analysis/hbond_protein_ligand.xvg
 analysis/md_centered.xtc
-analysis/rmsd_dual.png      # from plot_rmsd.py
+analysis/rmsd_complex.png      # from plot_rmsd.py
 analysis/hbond.png          # optional
 ```
 

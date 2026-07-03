@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plot protein/ligand RMSD (and optional H-bond) from analyze_one_system.sh outputs."""
+"""Plot protein–ligand complex RMSD (and optional H-bond) from analyze_one_system.sh outputs."""
 
 from __future__ import annotations
 
@@ -29,34 +29,24 @@ def nm_to_angstrom(nm: list[float]) -> list[float]:
     return [x * 10.0 for x in nm]
 
 
-def plot_rmsd_dual(
+def plot_rmsd_complex(
     analysis_dir: Path,
     out_path: Path,
     system_id: str,
     ref_lines: tuple[float, float, float] = (2.0, 3.0, 5.0),
-) -> dict[str, float | None]:
+) -> dict[str, float]:
     import matplotlib.pyplot as plt
 
-    prot_xvg = analysis_dir / "rmsd_protein.xvg"
-    lig_xvg = analysis_dir / "rmsd_ligand.xvg"
-    if not prot_xvg.is_file():
-        raise FileNotFoundError(f"Missing {prot_xvg} (run analyze_one_system.sh first)")
+    xvg = analysis_dir / "rmsd_complex.xvg"
+    if not xvg.is_file():
+        raise FileNotFoundError(f"Missing {xvg} (run analyze_one_system.sh first)")
 
-    tp, rp = read_xvg(prot_xvg)
+    tp, rp = read_xvg(xvg)
     time_ns = ps_to_ns(tp)
-    prot_A = nm_to_angstrom(rp)
+    rmsd_A = nm_to_angstrom(rp)
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
-    ax.plot(time_ns, prot_A, label="Protein (backbone)", color="steelblue", lw=1.5)
-
-    lig_mean: float | None = None
-    lig_max: float | None = None
-    if lig_xvg.is_file():
-        tl, rl = read_xvg(lig_xvg)
-        lig_A = nm_to_angstrom(rl)
-        ax.plot(ps_to_ns(tl), lig_A, label="Ligand", color="darkorange", lw=1.5)
-        lig_mean = sum(lig_A) / len(lig_A)
-        lig_max = max(lig_A)
+    ax.plot(time_ns, rmsd_A, label="Protein_LIG (complex)", color="steelblue", lw=1.5)
 
     for val, color, lbl in zip(
         ref_lines,
@@ -67,19 +57,16 @@ def plot_rmsd_dual(
 
     ax.set_xlabel("Time (ns)")
     ax.set_ylabel("RMSD (Å)")
-    ax.set_title(f"RMSD — {system_id}")
+    ax.set_title(f"Complex RMSD — {system_id}")
     ax.legend(loc="best")
     ax.grid(True, alpha=0.25)
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
-    prot_mean = sum(prot_A) / len(prot_A)
     return {
-        "prot_mean_A": prot_mean,
-        "prot_max_A": max(prot_A),
-        "lig_mean_A": lig_mean,
-        "lig_max_A": lig_max,
+        "complex_mean_A": sum(rmsd_A) / len(rmsd_A),
+        "complex_max_A": max(rmsd_A),
         "t_end_ns": time_ns[-1] if time_ns else 0.0,
     }
 
@@ -111,14 +98,14 @@ def plot_one_system(sys_dir: Path, skip_existing: bool) -> dict[str, str] | None
         print(f"SKIP {system_id}: no analysis/ directory", file=sys.stderr)
         return None
 
-    rmsd_png = analysis_dir / "rmsd_dual.png"
+    rmsd_png = analysis_dir / "rmsd_complex.png"
     hbond_png = analysis_dir / "hbond.png"
     if skip_existing and rmsd_png.is_file():
         print(f"SKIP {system_id}: {rmsd_png} exists")
         return {"system": system_id, "status": "skipped"}
 
     try:
-        stats = plot_rmsd_dual(analysis_dir, rmsd_png, system_id)
+        stats = plot_rmsd_complex(analysis_dir, rmsd_png, system_id)
         plot_hbond(analysis_dir, hbond_png, system_id)
     except FileNotFoundError as e:
         print(f"SKIP {system_id}: {e}", file=sys.stderr)
@@ -127,22 +114,19 @@ def plot_one_system(sys_dir: Path, skip_existing: bool) -> dict[str, str] | None
     print(f"OK {system_id}: {rmsd_png}")
     if hbond_png.is_file():
         print(f"    {hbond_png}")
-    row = {
+    return {
         "system": system_id,
         "status": "ok",
         "t_end_ns": f"{stats['t_end_ns']:.4f}",
-        "prot_mean_A": f"{stats['prot_mean_A']:.3f}",
-        "prot_max_A": f"{stats['prot_max_A']:.3f}",
-        "lig_mean_A": "" if stats["lig_mean_A"] is None else f"{stats['lig_mean_A']:.3f}",
-        "lig_max_A": "" if stats["lig_max_A"] is None else f"{stats['lig_max_A']:.3f}",
+        "complex_mean_A": f"{stats['complex_mean_A']:.3f}",
+        "complex_max_A": f"{stats['complex_max_A']:.3f}",
     }
-    return row
 
 
 def write_summary(rows: list[dict[str, str]], out_tsv: Path) -> None:
     if not rows:
         return
-    cols = ["system", "status", "t_end_ns", "prot_mean_A", "prot_max_A", "lig_mean_A", "lig_max_A"]
+    cols = ["system", "status", "t_end_ns", "complex_mean_A", "complex_max_A"]
     lines = ["\t".join(cols)]
     for r in rows:
         lines.append("\t".join(r.get(c, "") for c in cols))
@@ -153,7 +137,7 @@ def write_summary(rows: list[dict[str, str]], out_tsv: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Plot RMSD (and H-bond) from work/systems/<id>/analysis/*.xvg"
+        description="Plot complex RMSD from work/systems/<id>/analysis/rmsd_complex.xvg"
     )
     parser.add_argument(
         "system_dir",
@@ -163,7 +147,7 @@ def main() -> int:
     parser.add_argument(
         "--all",
         action="store_true",
-        help="Plot every work/systems/*/ that has analysis/rmsd_protein.xvg",
+        help="Plot every work/systems/*/ that has analysis/rmsd_complex.xvg",
     )
     parser.add_argument(
         "--project-dir",
@@ -174,7 +158,7 @@ def main() -> int:
     parser.add_argument(
         "--skip-existing",
         action="store_true",
-        help="Skip if analysis/rmsd_dual.png already exists",
+        help="Skip if analysis/rmsd_complex.png already exists",
     )
     args = parser.parse_args()
 

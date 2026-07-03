@@ -7,15 +7,12 @@ After `analyze_one_system.sh`, each prepared/run system has an `analysis/` folde
 | File | Content |
 |------|---------|
 | `md_centered.xtc` | Trajectory centered on protein (PBC mol) |
-| `rmsd_protein.xvg` | Backbone RMSD: fit Backbone, measure Backbone (vs `-s` reference) |
-| `rmsd_ligand.xvg` | Ligand RMSD: **fit Backbone, measure LIG** — displacement in binding site after aligning protein (same as “(Lig) fit on Prot” in papers) |
+| `rmsd_complex.xvg` | Complex RMSD: fit **Protein_LIG**, measure **Protein_LIG** (receptor + ligand as one group) |
 | `hbond_protein_ligand.xvg` | Protein–ligand H-bond count vs time |
 
 `.xvg` units from GROMACS: **time in ps**, **RMSD in nm**. For plots and the table below, convert to **ns** (÷ 1000) and **Å** (× 10).
 
-**What RMSD means:** root-mean-square distance of selected atoms **after** least-squares superposition of the *fit* group onto the reference structure (`production.tpr`). It is not “distance moved through space” in the lab frame; it is **structural deviation relative to the reference pose**, after removing rigid-body motion of the fit group.
-
-**If ligand RMSD starts at 20+ Å while the movie looks fine:** the old `LIG|LIG` analysis was wrong (fit ligand on itself). Re-run analyze after updating the script; expect ligand RMSD ≈ 0–3 Å for a stable PPARγ ligand, similar to your reference figure.
+**Complex RMSD:** least-squares fit of the whole `Protein_LIG` group onto the reference structure (`production.tpr`), then RMSD of the same group. Rigid motion of the complex is removed; internal changes in the binding pose appear in the curve.
 
 ## Plots (`plot_rmsd.py`)
 
@@ -41,7 +38,7 @@ python scripts/plot_rmsd.py --all
 Outputs per system:
 
 ```text
-work/systems/<id>/analysis/rmsd_dual.png    # protein + ligand RMSD
+work/systems/<id>/analysis/rmsd_complex.png
 work/systems/<id>/analysis/hbond.png        # if hbond xvg exists
 ```
 
@@ -55,19 +52,12 @@ results/rmsd_plot_summary.tsv
 
 | RMSD range | Stability | Notes |
 |------------|-----------|--------|
-| &lt; 2.0 Å | ★★★★★ Very stable | Little conformational change |
-| 2.0–3.0 Å | ★★★★ Stable | Normal fluctuations, good binding |
-| 3.0–5.0 Å | ★★★ Acceptable | Some motion, overall stable |
-| &gt; 5.0 Å | ★★ Unstable | Large change or ligand departure |
+| &lt; 2.0 Å | ★★★★★ Very stable | Little change in the whole complex |
+| 2.0–3.0 Å | ★★★★ Stable | Normal fluctuations |
+| 3.0–5.0 Å | ★★★ Acceptable | Some motion |
+| &gt; 5.0 Å | ★★ Unstable | Large rearrangement or loss of pose |
 
 **Plateau:** In the second half of the trajectory, RMSD fluctuates around a mean without a sustained climb → equilibrated.
-
-**Protein vs ligand:**
-
-- Protein often stable around **2–3 Å**.
-- Ligand ideally **&lt; 3 Å** in the pocket.
-- Ligand RMSD rising while protein stays low → possible unbinding or pose change.
-- Both rising together → possible global rearrangement, not necessarily loss of binding.
 
 ## Simulation length
 

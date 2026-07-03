@@ -34,20 +34,13 @@ if [ ! -f analysis/md_centered.xtc ]; then
     -center
 fi
 
-if [ ! -f analysis/rmsd_protein.xvg ]; then
-  printf "Backbone\nBackbone\n" | gmx rms \
-    -s "$TPR" \
-    -f analysis/md_centered.xtc \
-    -o analysis/rmsd_protein.xvg
-fi
-
-if [ ! -f analysis/rmsd_ligand.xvg ]; then
-  # Fit on protein backbone, RMSD on ligand (standard protein–ligand metric; NOT LIG|LIG).
-  printf "Backbone\nLIG\n" | gmx rms \
+if [ ! -f analysis/rmsd_complex.xvg ]; then
+  # Whole complex: fit Protein_LIG, measure Protein_LIG (receptor + ligand as one group).
+  printf "Protein_LIG\nProtein_LIG\n" | gmx rms \
     -s "$TPR" \
     -f analysis/md_centered.xtc \
     -n index.ndx \
-    -o analysis/rmsd_ligand.xvg || true
+    -o analysis/rmsd_complex.xvg
 fi
 
 if [ ! -f analysis/hbond_protein_ligand.xvg ]; then

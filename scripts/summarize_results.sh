@@ -29,7 +29,7 @@ for SYS in "$SYSTEMS_ROOT"/*; do
   nvt=$([ -f "$SYS/nvt.gro" ] && echo yes || echo no)
   npt=$([ -f "$SYS/npt.gro" ] && echo yes || echo no)
   prod=$([ -f "$SYS/${PRODUCTION_DEFFNM}.gro" ] && echo yes || echo no)
-  analysis=$([ -f "$SYS/analysis/rmsd_protein.xvg" ] && echo yes || echo no)
+  analysis=$([ -f "$SYS/analysis/rmsd_complex.xvg" ] && echo yes || echo no)
   echo -e "$NAME\t$prepared\t$em\t$nvt\t$npt\t$prod\t$analysis" >> "$STATUS_OUT"
 done
 
